@@ -1,0 +1,6 @@
+{
+  "name": "Stripe & Gmail Payment Gateway Hub",
+  "description": "Safe Stripe testing panel, payment simulator, subscription manager, webhook inspector, and Gmail payment receipt dispatcher.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
