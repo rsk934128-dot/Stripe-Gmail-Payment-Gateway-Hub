@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Radio, Terminal, Send, Copy, Check, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw, Code2, ExternalLink } from 'lucide-react';
 import { WebhookEventRecord } from '../types';
+import webhookEventBanner from '../assets/images/webhook_event_banner_1790807169907.jpg';
 
 interface WebhookStudioTabProps {
   lang?: 'bn' | 'en';

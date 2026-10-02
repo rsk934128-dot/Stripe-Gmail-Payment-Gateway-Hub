@@ -1,5 +1,34 @@
-import React, { useState } from 'react';
-import { Layers, Mail, CheckCircle2, ShieldCheck, RefreshCw, FileText, ArrowRight, UserPlus, CreditCard } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Layers,
+  Mail,
+  CheckCircle2,
+  ShieldCheck,
+  RefreshCw,
+  FileText,
+  ArrowRight,
+  UserPlus,
+  CreditCard,
+  TrendingUp,
+  BarChart3,
+  DollarSign,
+  Activity,
+  ArrowUpRight,
+  PieChart as PieIcon,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { SubscriptionItem } from '../types';
 import { PaymentReceiptEmailData } from '../services/gmail';
 
@@ -27,6 +56,7 @@ export const SubscriptionTab: React.FC<SubscriptionTabProps> = ({
   const [customPriceId, setCustomPriceId] = useState<string>('');
   const [useCustomPrice, setUseCustomPrice] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [timeframe, setTimeframe] = useState<'6m' | '12m'>('6m');
 
   const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([
     {
@@ -43,6 +73,109 @@ export const SubscriptionTab: React.FC<SubscriptionTabProps> = ({
       latestInvoiceId: 'in_1QkL294ZtestInvoice01',
     },
   ]);
+
+  // Dynamic MRR & Metrics calculation based on simulated data and active subscriptions
+  const liveActiveSubsMRR = useMemo(() => {
+    return subscriptions
+      .filter((s) => s.status === 'active')
+      .reduce((acc, s) => acc + s.amount / 100, 0);
+  }, [subscriptions]);
+
+  const liveTotalSubsCount = useMemo(() => {
+    return subscriptions.filter((s) => s.status === 'active').length;
+  }, [subscriptions]);
+
+  // Full 12-month simulated baseline data
+  const simulatedHistory = useMemo(() => {
+    const data = [
+      { month: 'Nov', mrr: 1450, volume: 8200, transactions: 110, newSubs: 14 },
+      { month: 'Dec', mrr: 1820, volume: 10400, transactions: 135, newSubs: 18 },
+      { month: 'Jan', mrr: 2240, volume: 12900, transactions: 160, newSubs: 22 },
+      { month: 'Feb', mrr: 2690, volume: 15400, transactions: 195, newSubs: 26 },
+      { month: 'Mar', mrr: 3180, volume: 18800, transactions: 230, newSubs: 31 },
+      { month: 'Apr', mrr: 3750, volume: 22400, transactions: 275, newSubs: 37 },
+      { month: 'May', mrr: 4320, volume: 26100, transactions: 315, newSubs: 42 },
+      { month: 'Jun', mrr: 4980, volume: 30800, transactions: 360, newSubs: 48 },
+      { month: 'Jul', mrr: 5620, volume: 35200, transactions: 410, newSubs: 54 },
+      { month: 'Aug', mrr: 6240, volume: 39600, transactions: 455, newSubs: 61 },
+      { month: 'Sep', mrr: 6890, volume: 44200, transactions: 510, newSubs: 68 },
+      {
+        month: 'Current',
+        mrr: Math.round(7450 + liveActiveSubsMRR),
+        volume: Math.round(48500 + liveActiveSubsMRR * 3.5),
+        transactions: 560 + liveTotalSubsCount * 2,
+        newSubs: 75 + liveTotalSubsCount,
+      },
+    ];
+    return data;
+  }, [liveActiveSubsMRR, liveTotalSubsCount]);
+
+  const activeChartData = useMemo(() => {
+    return timeframe === '6m' ? simulatedHistory.slice(6) : simulatedHistory;
+  }, [simulatedHistory, timeframe]);
+
+  const latestMRR = activeChartData[activeChartData.length - 1].mrr;
+  const previousMRR = activeChartData[activeChartData.length - 2]?.mrr || latestMRR;
+  const mrrGrowthPct = (((latestMRR - previousMRR) / previousMRR) * 100).toFixed(1);
+  const totalPeriodVolume = activeChartData.reduce((acc, d) => acc + d.volume, 0);
+  const totalTransactions = activeChartData.reduce((acc, d) => acc + d.transactions, 0);
+  const averageARPU = (latestMRR / (180 + liveTotalSubsCount)).toFixed(2);
+
+  // Subscription tier distribution for PieChart
+  const tierDistributionData = useMemo(() => {
+    let starterCount = 85;
+    let proCount = 135;
+    let entCount = 35;
+    let customCount = 0;
+
+    subscriptions.forEach((sub) => {
+      if (sub.status !== 'canceled') {
+        const name = (sub.planName || '').toLowerCase();
+        if (name.includes('starter')) starterCount += 1;
+        else if (name.includes('pro')) proCount += 1;
+        else if (name.includes('ent')) entCount += 1;
+        else customCount += 1;
+      }
+    });
+
+    const totalSubs = starterCount + proCount + entCount + customCount;
+
+    const data = [
+      {
+        name: lang === 'bn' ? 'Starter ($9)' : 'Starter ($9)',
+        value: starterCount,
+        color: '#38bdf8',
+        mrr: starterCount * 9,
+        percentage: Math.round((starterCount / totalSubs) * 100),
+      },
+      {
+        name: lang === 'bn' ? 'Professional ($29)' : 'Professional ($29)',
+        value: proCount,
+        color: '#a855f7',
+        mrr: proCount * 29,
+        percentage: Math.round((proCount / totalSubs) * 100),
+      },
+      {
+        name: lang === 'bn' ? 'Enterprise ($99)' : 'Enterprise ($99)',
+        value: entCount,
+        color: '#10b981',
+        mrr: entCount * 99,
+        percentage: Math.round((entCount / totalSubs) * 100),
+      },
+    ];
+
+    if (customCount > 0) {
+      data.push({
+        name: lang === 'bn' ? 'Custom Plan' : 'Custom Plan',
+        value: customCount,
+        color: '#f59e0b',
+        mrr: customCount * 29,
+        percentage: Math.round((customCount / totalSubs) * 100),
+      });
+    }
+
+    return { data, totalSubs };
+  }, [subscriptions, lang]);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +278,315 @@ export const SubscriptionTab: React.FC<SubscriptionTabProps> = ({
           <span className="absolute bottom-1.5 left-2 text-[10px] font-mono text-purple-300 font-semibold bg-slate-950/80 px-2 py-0.5 rounded border border-purple-500/30">
             Tiered Billing Active
           </span>
+        </div>
+      </div>
+
+      {/* Recharts Analytics: Executive KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* KPI 1: MRR */}
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span className="font-semibold flex items-center gap-1.5 text-slate-300">
+              <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+              <span>{lang === 'bn' ? 'বর্তমান MRR' : 'Current MRR'}</span>
+            </span>
+            <span className="inline-flex items-center text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/20">
+              <ArrowUpRight className="w-3 h-3" />
+              +{mrrGrowthPct}%
+            </span>
+          </div>
+          <div className="text-2xl font-black text-white font-mono">
+            ${latestMRR.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {lang === 'bn' ? 'মাসিক পুনরাবৃত্ত রেভিনিউ' : 'Monthly Recurring Revenue'}
+          </div>
+        </div>
+
+        {/* KPI 2: Total Volume */}
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-lg relative overflow-hidden group hover:border-emerald-500/40 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span className="font-semibold flex items-center gap-1.5 text-slate-300">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{lang === 'bn' ? 'মোট ভলিউম' : 'Total Volume'}</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              {timeframe.toUpperCase()}
+            </span>
+          </div>
+          <div className="text-2xl font-black text-white font-mono">
+            ${totalPeriodVolume.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {lang === 'bn' ? 'গ্রস ট্রানজেকশন ভলিউম' : 'Gross transaction throughput'}
+          </div>
+        </div>
+
+        {/* KPI 3: Total Transactions */}
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span className="font-semibold flex items-center gap-1.5 text-slate-300">
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{lang === 'bn' ? 'ট্রানজেকশন' : 'Transactions'}</span>
+            </span>
+            <span className="text-[10px] text-cyan-300 font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded-full border border-cyan-500/20">
+              Live
+            </span>
+          </div>
+          <div className="text-2xl font-black text-white font-mono">
+            {totalTransactions.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {lang === 'bn' ? 'সফল বিলিং লেনদেন' : 'Successful billing charges'}
+          </div>
+        </div>
+
+        {/* KPI 4: ARPU */}
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 shadow-lg relative overflow-hidden group hover:border-indigo-500/40 transition">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span className="font-semibold flex items-center gap-1.5 text-slate-300">
+              <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{lang === 'bn' ? 'গড় ARPU' : 'Avg. ARPU'}</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              ~{180 + liveTotalSubsCount} subs
+            </span>
+          </div>
+          <div className="text-2xl font-black text-white font-mono">
+            ${averageARPU}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {lang === 'bn' ? 'প্রতি ইউজারে গড় রেভিনিউ' : 'Average Revenue Per User'}
+          </div>
+        </div>
+      </div>
+
+      {/* Dual Charts Grid: Bar Chart (Monthly Trends) + Pie Chart (Tier Distribution) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* 1. Bar Chart: Monthly Trends (MRR & Transaction Volume) */}
+        <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3 flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-purple-400" />
+                {lang === 'bn'
+                  ? 'মাসিক ট্রেন্ডস: MRR ও ট্রানজেকশন ভলিউম'
+                  : 'Monthly Trends: MRR & Transaction Volume'}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {lang === 'bn'
+                  ? 'বার চার্টের মাধ্যমে রেভিনিউ ও পেমেন্ট ভলিউম পর্যবেক্ষণ'
+                  : 'Grouped bar chart visualizing MRR and gross volume over time'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center gap-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setTimeframe('6m')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                    timeframe === '6m'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  6M
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimeframe('12m')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                    timeframe === '12m'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  12M
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-64 sm:h-72 w-full pt-1 min-h-[250px] min-w-0">
+            <ResponsiveContainer width="100%" height={260} minWidth={100} minHeight={200}>
+              <BarChart data={activeChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis
+                  yAxisId="left"
+                  stroke="#a855f7"
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(val) => `$${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#06b6d4"
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(val) => `$${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-slate-900/95 border border-slate-700/80 p-3 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-1.5">
+                          <p className="font-bold text-slate-200 border-b border-slate-800 pb-1 flex items-center justify-between gap-4">
+                            <span>{label}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Monthly Bar Trend</span>
+                          </p>
+                          {payload.map((item: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between gap-6">
+                              <span className="flex items-center gap-1.5 text-slate-300">
+                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                                {item.name}:
+                              </span>
+                              <span className="font-mono font-bold text-white">
+                                ${Number(item.value).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                          <div className="flex items-center justify-between gap-6 text-[10px] text-slate-400 pt-1 border-t border-slate-800">
+                            <span>Transactions:</span>
+                            <span className="font-mono font-semibold text-slate-300">
+                              {payload[0]?.payload?.transactions}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Legend
+                  verticalAlign="top"
+                  align="right"
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: '11px', paddingBottom: '8px' }}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="mrr"
+                  name="MRR ($)"
+                  fill="#a855f7"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={28}
+                />
+                <Bar
+                  yAxisId="right"
+                  dataKey="volume"
+                  name="Total Volume ($)"
+                  fill="#06b6d4"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={28}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* 2. Pie Chart: Subscription Tier Distribution */}
+        <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3 flex flex-col justify-between">
+          <div className="border-b border-slate-800/80 pb-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <PieIcon className="w-4 h-4 text-indigo-400" />
+                {lang === 'bn'
+                  ? 'সাবস্ক্রিপশন টিয়ার বিন্যাস'
+                  : 'Subscription Tier Distribution'}
+              </h3>
+              <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                {tierDistributionData.totalSubs} {lang === 'bn' ? 'ইউজার' : 'subs'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {lang === 'bn'
+                ? 'প্ল্যানভিত্তিক গ্রাহক সংখ্যা এবং শতাংশের পাই চার্ট'
+                : 'Pie chart visualizing subscriber proportions and plan share'}
+            </p>
+          </div>
+
+          {/* Donut / Pie Chart */}
+          <div className="h-44 sm:h-48 w-full relative flex items-center justify-center min-h-[180px] min-w-0">
+            <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={160}>
+              <PieChart>
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900/95 border border-slate-700/80 p-3 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-1">
+                          <div className="font-bold text-white flex items-center gap-1.5 pb-1 border-b border-slate-800">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
+                            <span>{data.name}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-slate-300 pt-0.5">
+                            <span>Subscribers:</span>
+                            <span className="font-mono font-bold text-white">{data.value}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-slate-300">
+                            <span>Share:</span>
+                            <span className="font-mono font-bold text-emerald-400">{data.percentage}%</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-slate-300">
+                            <span>Monthly Yield:</span>
+                            <span className="font-mono font-bold text-purple-300">${data.mrr.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Pie
+                  data={tierDistributionData.data}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  stroke="#0f172a"
+                  strokeWidth={2}
+                >
+                  {tierDistributionData.data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center Donut Label */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[11px] text-slate-400 font-medium">
+                {lang === 'bn' ? 'মোট গ্রাহক' : 'Total'}
+              </span>
+              <span className="text-base font-black text-white font-mono">
+                {tierDistributionData.totalSubs}
+              </span>
+            </div>
+          </div>
+
+          {/* Tier breakdown badges list */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+            {tierDistributionData.data.map((tier) => (
+              <div
+                key={tier.name}
+                className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2 flex items-center justify-between text-xs"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tier.color }} />
+                  <span className="text-slate-300 font-medium text-[11px] truncate">{tier.name}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                  <span className="font-mono font-bold text-white text-[11px]">{tier.value}</span>
+                  <span className="text-[10px] text-slate-400">({tier.percentage}%)</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -19,6 +19,7 @@ import { GoogleSignInButton } from './components/GoogleSignInButton';
 import { ConfirmEmailModal } from './components/ConfirmEmailModal';
 import { KeyVerifierTab } from './components/KeyVerifierTab';
 import { PaymentSimulatorTab } from './components/PaymentSimulatorTab';
+import { AIAgentTab } from './components/AIAgentTab';
 import { SubscriptionTab } from './components/SubscriptionTab';
 import { WebhookStudioTab } from './components/WebhookStudioTab';
 import { GmailInboxTab } from './components/GmailInboxTab';
@@ -28,8 +29,9 @@ import { StripeKeyStatus } from './types';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { PWABuilderModal } from './components/PWABuilderModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { Bot } from 'lucide-react';
 
-type TabType = 'verifier' | 'simulator' | 'subscriptions' | 'webhooks' | 'gmail' | 'deployment';
+type TabType = 'verifier' | 'simulator' | 'ai-agent' | 'subscriptions' | 'webhooks' | 'gmail' | 'deployment';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('verifier');
@@ -112,6 +114,12 @@ export default function App() {
       labelBn: 'কী ভেরিফিকেশন',
       labelEn: 'API Key Check',
       icon: <KeyRound className="w-4 h-4" />,
+    },
+    {
+      id: 'ai-agent',
+      labelBn: 'এআই এজেন্ট পেমেন্ট',
+      labelEn: 'AI Agent Pay',
+      icon: <Bot className="w-4 h-4 text-purple-400" />,
     },
     {
       id: 'simulator',
@@ -261,6 +269,14 @@ export default function App() {
             setPublishableKey={setPublishableKey}
             keyStatus={keyStatus}
             setKeyStatus={setKeyStatus}
+            lang={lang}
+          />
+        )}
+
+        {activeTab === 'ai-agent' && (
+          <AIAgentTab
+            serverKeyConfigured={serverKeyConfigured}
+            manualSecretKey={manualSecretKey}
             lang={lang}
           />
         )}

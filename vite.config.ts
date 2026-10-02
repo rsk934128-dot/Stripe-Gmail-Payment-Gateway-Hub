@@ -80,23 +80,41 @@ export default defineConfig(() => {
           ],
           screenshots: [
             {
-              src: '/screenshots/hero_banner.jpg',
+              src: '/screenshots/desktop-dashboard.png',
+              sizes: '1920x1080',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Stripe & Gmail Gateway Hub Desktop Dashboard',
+            },
+            {
+              src: '/screenshots/mobile-dashboard.png',
+              sizes: '1080x1920',
+              type: 'image/png',
+              form_factor: 'narrow',
+              label: 'Mobile Viewport & Payment Simulator',
+            },
+            {
+              src: '/screenshots/desktop-dashboard.jpg',
               sizes: '1920x1080',
               type: 'image/jpeg',
               form_factor: 'wide',
-              label: 'Stripe & Gmail Gateway Hub Dashboard',
+              label: 'Desktop Dashboard Overview',
             },
             {
-              src: '/screenshots/pwa_showcase.jpg',
-              sizes: '1920x1080',
+              src: '/screenshots/mobile-dashboard.jpg',
+              sizes: '1080x1920',
               type: 'image/jpeg',
               form_factor: 'narrow',
-              label: 'Responsive PWA & Mobile Experience',
+              label: 'Mobile Responsive Interface',
             },
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{ico,png,svg,woff,woff2}'],
+          navigateFallback: null,
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -129,8 +147,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true, // Enables service worker in development / AI Studio preview
-          type: 'module',
+          enabled: false,
         },
       }),
     ],

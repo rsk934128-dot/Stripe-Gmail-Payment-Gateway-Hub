@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CreditCard, DollarSign, Send, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Sparkles, Mail, RefreshCw, Copy, Check } from 'lucide-react';
 import { PaymentSimulationResult } from '../types';
 import { PaymentReceiptEmailData } from '../services/gmail';
+import paymentFlowDiagram from '../assets/images/payment_flow_diagram_1790806964488.jpg';
 
 interface PaymentSimulatorTabProps {
   manualSecretKey: string;
@@ -264,7 +265,10 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
 
         <div className="w-full md:w-64 h-28 rounded-xl overflow-hidden border border-indigo-500/30 shadow-md relative shrink-0 group">
           <img
-            src="/src/assets/images/payment_flow_diagram_1790806964488.jpg"
+            src={paymentFlowDiagram}
+            onError={(e) => {
+              e.currentTarget.src = '/assets/images/payment_flow_diagram_1790806964488.jpg';
+            }}
             alt="Payment Flow Diagram"
             className="w-full h-full object-cover object-center transform group-hover:scale-105 transition duration-500"
             referrerPolicy="no-referrer"
