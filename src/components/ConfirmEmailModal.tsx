@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mail, AlertCircle, ShieldAlert, X } from 'lucide-react';
 import { PaymentReceiptEmailData } from '../services/gmail';
+import { getSavedReceiptTemplate, interpolateVariables } from '../services/receiptTemplate';
 
 interface ConfirmEmailModalProps {
   isOpen: boolean;
@@ -84,9 +85,9 @@ export const ConfirmEmailModal: React.FC<ConfirmEmailModalProps> = ({
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-slate-400">{lang === 'bn' ? 'ইমেইল সাবজেক্ট:' : 'Email Subject:'}</span>
-            <span className="text-slate-300 truncate max-w-[260px]">
-              Receipt for payment of {formattedAmount} {cur}
+            <span className="text-slate-400 shrink-0 mr-2">{lang === 'bn' ? 'ইমেইল সাবজেক্ট:' : 'Email Subject:'}</span>
+            <span className="text-slate-300 truncate max-w-[280px] font-mono text-[11px]" title={data.customSubject ? interpolateVariables(data.customSubject, data) : interpolateVariables(getSavedReceiptTemplate().subject, data)}>
+              {data.customSubject ? interpolateVariables(data.customSubject, data) : interpolateVariables(getSavedReceiptTemplate().subject, data)}
             </span>
           </div>
         </div>

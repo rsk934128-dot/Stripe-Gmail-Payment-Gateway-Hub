@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Filter,
   Zap,
+  FileText,
+  ChevronRight,
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import {
@@ -30,6 +32,8 @@ import {
   PaymentReceiptEmailData,
 } from '../services/gmail';
 import { ConfirmLabelModal } from './ConfirmLabelModal';
+import { ReceiptTemplateCustomizer } from './ReceiptTemplateCustomizer';
+import gmailReceiptBanner from '../assets/images/gmail_receipt_banner_1790807180762.jpg';
 
 interface GmailInboxTabProps {
   user: FirebaseUser | null;
@@ -47,6 +51,7 @@ export const GmailInboxTab: React.FC<GmailInboxTabProps> = ({
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterOnlyPayments, setFilterOnlyPayments] = useState(false);
+  const [subTab, setSubTab] = useState<'inbox' | 'template'>('inbox');
 
   // Label Confirmation Modal State
   const [confirmLabelModalOpen, setConfirmLabelModalOpen] = useState(false);
@@ -253,7 +258,10 @@ export const GmailInboxTab: React.FC<GmailInboxTabProps> = ({
       <div className="max-w-2xl mx-auto my-8 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-2xl overflow-hidden">
         <div className="w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-red-500/20 shadow-lg relative group">
           <img
-            src="/src/assets/images/gmail_receipt_banner_1790807180762.jpg"
+            src={gmailReceiptBanner}
+            onError={(e) => {
+              e.currentTarget.src = '/assets/images/gmail_receipt_banner_1790807180762.jpg';
+            }}
             alt="Gmail Receipt Automation"
             className="w-full h-full object-cover object-center transform group-hover:scale-105 transition duration-500"
             referrerPolicy="no-referrer"
@@ -353,7 +361,10 @@ export const GmailInboxTab: React.FC<GmailInboxTabProps> = ({
 
         <div className="w-full md:w-64 h-28 rounded-xl overflow-hidden border border-red-500/30 shadow-md relative shrink-0 group">
           <img
-            src="/src/assets/images/gmail_receipt_banner_1790807180762.jpg"
+            src={gmailReceiptBanner}
+            onError={(e) => {
+              e.currentTarget.src = '/assets/images/gmail_receipt_banner_1790807180762.jpg';
+            }}
             alt="Gmail Receipt Banner"
             className="w-full h-full object-cover object-center transform group-hover:scale-105 transition duration-500"
             referrerPolicy="no-referrer"
@@ -365,8 +376,67 @@ export const GmailInboxTab: React.FC<GmailInboxTabProps> = ({
         </div>
       </div>
 
-      {/* NEW: Payments Label Organizer Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 rounded-2xl p-5 shadow-xl">
+      {/* Sub-Tabs Navigation Control */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-lg">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSubTab('inbox')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+              subTab === 'inbox'
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-950/40'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Inbox className="w-4 h-4" />
+            <span>{lang === 'bn' ? 'বিলিং ইনবক্স ও রসিদ প্রেরণ' : 'Billing Inbox & Receipts'}</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-950/80 font-mono font-bold">
+              {messages.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('template')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+              subTab === 'template'
+                ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md shadow-indigo-950/40'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>{lang === 'bn' ? 'রসিদ ইমেইল টেমপ্লেট কাস্টমাইজার' : 'Receipt Template Customizer'}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+              {lang === 'bn' ? '{ভেরিয়েবল}' : '{Variables}'}
+            </span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-400 hidden sm:flex items-center gap-2 pr-2">
+          {subTab === 'inbox' ? (
+            <button
+              type="button"
+              onClick={() => setSubTab('template')}
+              className="text-[11px] text-indigo-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
+            >
+              <span>{lang === 'bn' ? 'রসিদ টেমপ্লেট এডিট করুন' : 'Customize Email Template'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          ) : (
+            <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+              <Check className="w-3 h-3" />
+              <span>{lang === 'bn' ? '{customerName} ও {amount} সমর্থিত' : 'Supports {customerName} & {amount}'}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {subTab === 'template' ? (
+        <ReceiptTemplateCustomizer user={user} lang={lang} />
+      ) : (
+        <>
+          {/* NEW: Payments Label Organizer Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 rounded-2xl p-5 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -482,9 +552,20 @@ export const GmailInboxTab: React.FC<GmailInboxTabProps> = ({
                 <Send className="w-4 h-4 text-red-400" />
                 {lang === 'bn' ? 'কাস্টম রসিদ প্রেরণ (Gmail)' : 'Dispatch Custom Receipt'}
               </h3>
-              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-semibold">
-                OAuth Active
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSubTab('template')}
+                  className="text-[10px] text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-500/30 font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title={lang === 'bn' ? 'রসিদ টেমপ্লেট ও ভেরিয়েবল কাস্টমাইজ করুন' : 'Customize Receipt Template & Variables'}
+                >
+                  <FileText className="w-3 h-3 text-indigo-400" />
+                  <span>{lang === 'bn' ? 'টেমপ্লেট কাস্টমাইজ' : 'Edit Template'}</span>
+                </button>
+                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-semibold hidden sm:inline-block">
+                  OAuth Active
+                </span>
+              </div>
             </div>
 
             <div>
@@ -786,6 +867,8 @@ export const GmailInboxTab: React.FC<GmailInboxTabProps> = ({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Confirmation Modal for Label Operations */}
       <ConfirmLabelModal

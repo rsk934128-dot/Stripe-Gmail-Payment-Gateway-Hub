@@ -1,5 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { type FunctionDeclaration, Type } from '@google/genai';
+
+// Client-safe Gemini Tool Schema Type Definitions (avoids bundling Node SDK into browser)
+export const Type = {
+  OBJECT: 'OBJECT',
+  STRING: 'STRING',
+  NUMBER: 'NUMBER',
+  BOOLEAN: 'BOOLEAN',
+  ARRAY: 'ARRAY',
+  INTEGER: 'INTEGER',
+} as const;
+
+export interface FunctionDeclaration {
+  name: string;
+  description: string;
+  parameters: {
+    type: string;
+    properties: Record<string, { type: string; description: string }>;
+    required?: string[];
+  };
+}
+
 import {
   Bot,
   Send,

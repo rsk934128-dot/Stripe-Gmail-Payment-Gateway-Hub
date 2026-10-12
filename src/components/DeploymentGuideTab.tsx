@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BookOpen, Copy, Check, Terminal, ExternalLink, ShieldCheck, Download, Code, Globe } from 'lucide-react';
+import pwaMobileShowcase from '../assets/images/pwa_mobile_showcase_1790806977280.jpg';
 
 interface DeploymentGuideTabProps {
   lang?: 'bn' | 'en';
@@ -160,7 +161,10 @@ export const DeploymentGuideTab: React.FC<DeploymentGuideTabProps> = ({ lang = '
 
         <div className="w-full md:w-64 h-28 rounded-xl overflow-hidden border border-indigo-500/30 shadow-md relative shrink-0 group">
           <img
-            src="/src/assets/images/pwa_mobile_showcase_1790806977280.jpg"
+            src={pwaMobileShowcase}
+            onError={(e) => {
+              e.currentTarget.src = '/assets/images/pwa_mobile_showcase_1790806977280.jpg';
+            }}
             alt="PWA Mobile Showcase"
             className="w-full h-full object-cover object-center transform group-hover:scale-105 transition duration-500"
             referrerPolicy="no-referrer"

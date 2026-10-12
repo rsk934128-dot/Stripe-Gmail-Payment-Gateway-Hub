@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { SubscriptionItem } from '../types';
 import { PaymentReceiptEmailData } from '../services/gmail';
+import subscriptionBillingBanner from '../assets/images/subscription_billing_banner_1790807157156.jpg';
 
 interface SubscriptionTabProps {
   manualSecretKey: string;
@@ -269,7 +270,10 @@ export const SubscriptionTab: React.FC<SubscriptionTabProps> = ({
 
         <div className="w-full md:w-64 h-28 rounded-xl overflow-hidden border border-purple-500/30 shadow-md relative shrink-0 group">
           <img
-            src="/src/assets/images/subscription_billing_banner_1790807157156.jpg"
+            src={subscriptionBillingBanner}
+            onError={(e) => {
+              e.currentTarget.src = '/assets/images/subscription_billing_banner_1790807157156.jpg';
+            }}
             alt="Subscription Billing Banner"
             className="w-full h-full object-cover object-center transform group-hover:scale-105 transition duration-500"
             referrerPolicy="no-referrer"

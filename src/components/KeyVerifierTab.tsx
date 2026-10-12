@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   KeyRound,
   ShieldCheck,
@@ -20,8 +20,19 @@ import {
   FileText,
   Copy,
   Check,
+  Zap,
+  Gauge,
+  Sliders,
+  ShieldAlert,
+  Play,
+  Pause,
+  BarChart2,
+  Sparkles,
+  Info,
+  Timer,
+  TrendingUp,
 } from 'lucide-react';
-import { StripeKeyStatus } from '../types';
+import { StripeKeyStatus, RateLimitStatus, RateLimitHistoryPoint } from '../types';
 import keyVaultBanner from '../assets/images/key_vault_banner_1790807145182.jpg';
 
 export interface KeyValidationLog {
@@ -92,6 +103,116 @@ export const KeyVerifierTab: React.FC<KeyVerifierTabProps> = ({
     },
   ]);
 
+  // Real-time Rate Usage Monitor state
+  const [rateStatus, setRateStatus] = useState<RateLimitStatus | null>(null);
+  const [rateLoading, setRateLoading] = useState<boolean>(false);
+  const [isRatePolling, setIsRatePolling] = useState<boolean>(true);
+  const [rateBurstSimulating, setRateBurstSimulating] = useState<boolean>(false);
+  const [burstToast, setBurstToast] = useState<{ text: string; type: 'success' | 'warning' | 'info' } | null>(null);
+
+  // Poll / fetch real-time Stripe API rate limit usage
+  const fetchRateStatus = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setRateLoading(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (useManualKey && manualSecretKey.trim()) {
+        headers['x-stripe-secret-key'] = manualSecretKey.trim();
+      }
+      const res = await fetch('/api/rate-limit-status', { headers });
+      if (res.ok) {
+        const data: RateLimitStatus = await res.json();
+        setRateStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to poll rate limit status:', err);
+    } finally {
+      if (isManualRefresh) setRateLoading(false);
+    }
+  }, [useManualKey, manualSecretKey]);
+
+  // Initial fetch and 2-second live ticker
+  useEffect(() => {
+    fetchRateStatus();
+  }, [fetchRateStatus]);
+
+  useEffect(() => {
+    if (!isRatePolling) return;
+    const interval = setInterval(() => {
+      fetchRateStatus();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isRatePolling, fetchRateStatus]);
+
+  // Dispatch simulated test bursts (Light: 5 req, Moderate: 12 req, Heavy: 22 req)
+  const handleTriggerBurst = async (burstCount: number) => {
+    setRateBurstSimulating(true);
+    try {
+      const res = await fetch('/api/rate-limit/test-burst', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ burstCount }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRateStatus(data.status);
+        const isAlert = data.status.status === 'critical' || data.status.status === 'throttled';
+        setBurstToast({
+          text: lang === 'bn'
+            ? `⚡ ${burstCount}টি টেস্ট রিকোয়েস্ট প্রেরিত! বর্তমান বেগ: ${data.status.currentPerSecond}/${data.status.limitPerSecond} req/s`
+            : `⚡ Dispatched ${burstCount} test requests! Current velocity: ${data.status.currentPerSecond}/${data.status.limitPerSecond} req/s`,
+          type: isAlert ? 'warning' : 'success',
+        });
+        setTimeout(() => setBurstToast(null), 4000);
+      }
+    } catch (err: any) {
+      setBurstToast({ text: err.message || 'Failed to dispatch burst', type: 'info' });
+      setTimeout(() => setBurstToast(null), 4000);
+    } finally {
+      setRateBurstSimulating(false);
+    }
+  };
+
+  // Toggle Auto-Pacing Safety Guard
+  const handleToggleSafetyGuard = async () => {
+    try {
+      const current = rateStatus?.safetyGuardActive ?? true;
+      const res = await fetch('/api/rate-limit/toggle-guard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !current }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRateStatus((prev) => prev ? { ...prev, safetyGuardActive: data.safetyGuardActive } : null);
+        setBurstToast({
+          text: data.message,
+          type: 'info',
+        });
+        setTimeout(() => setBurstToast(null), 3500);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Reset Monitor History
+  const handleResetRateMonitor = async () => {
+    try {
+      const res = await fetch('/api/rate-limit/reset', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setRateStatus(data.status);
+        setBurstToast({
+          text: lang === 'bn' ? 'মনিটর হিস্ট্রি রিসেট সম্পন্ন হয়েছে।' : 'Rate usage history reset successfully.',
+          type: 'info',
+        });
+        setTimeout(() => setBurstToast(null), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleVerify = async () => {
     setLoading(true);
     const startTime = performance.now();
@@ -157,6 +278,7 @@ export const KeyVerifierTab: React.FC<KeyVerifierTabProps> = ({
       setLogs((prev) => [failedLog, ...prev]);
     } finally {
       setLoading(false);
+      fetchRateStatus();
     }
   };
 
@@ -185,6 +307,30 @@ export const KeyVerifierTab: React.FC<KeyVerifierTabProps> = ({
 
   return (
     <div className="space-y-6 text-left max-w-5xl mx-auto">
+      {/* Toast Notification */}
+      {burstToast && (
+        <div className="fixed top-5 right-5 z-50 animate-in slide-in-from-top-4 duration-200">
+          <div
+            className={`px-4 py-3 rounded-2xl shadow-2xl border text-xs font-semibold flex items-center gap-2.5 backdrop-blur-md ${
+              burstToast.type === 'success'
+                ? 'bg-emerald-950/90 text-emerald-200 border-emerald-500/40 shadow-emerald-950/50'
+                : burstToast.type === 'warning'
+                ? 'bg-amber-950/90 text-amber-200 border-amber-500/40 shadow-amber-950/50'
+                : 'bg-indigo-950/90 text-indigo-200 border-indigo-500/40 shadow-indigo-950/50'
+            }`}
+          >
+            {burstToast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : burstToast.type === 'warning' ? (
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+            )}
+            <span>{burstToast.text}</span>
+          </div>
+        </div>
+      )}
+
       {/* Intro Header with Graphic Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
@@ -237,6 +383,390 @@ export const KeyVerifierTab: React.FC<KeyVerifierTabProps> = ({
               <ShieldCheck className="w-3 h-3 text-emerald-400" />
               <span>Encrypted Sandbox</span>
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* REAL-TIME STRIPE API RATE USAGE & RATE LIMIT MONITOR */}
+      {/* ========================================================================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 lg:p-7 shadow-2xl relative overflow-hidden backdrop-blur-md space-y-6">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-emerald-500/10 via-cyan-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+        {/* Header with Title, Mode Badge, Polling Controls, Auto-Pacing Guard */}
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                {lang === 'bn' ? 'রিয়েল-টাইম রেট টেলিমেট্রি' : 'Live Rate Usage Telemetry'}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-slate-950 text-slate-300 border border-slate-800">
+                {rateStatus?.mode === 'live' ? '⚡ Production Tier (100 req/s)' : '🧪 Stripe Test Mode (25 req/s)'}
+              </span>
+            </div>
+
+            <h3 className="text-lg lg:text-xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <Gauge className="w-5 h-5 text-emerald-400" />
+              {lang === 'bn'
+                ? 'Stripe API রিয়েল-টাইম রেট লিমিট মনিটর'
+                : 'Stripe API Real-Time Rate Usage & Limits Monitor'}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
+              {lang === 'bn'
+                ? 'টেস্টিং ব্যাহত হওয়া রোধে প্রতি সেকেন্ড ও মিনিটের ব্যবহৃত রিকোয়েস্ট বনাম Stripe লিমিট সরাসরি পর্যবেক্ষণ করুন।'
+                : 'Monitor real-time request velocity vs. Stripe threshold limits to prevent HTTP 429 rate-limiting interruptions during development & testing.'}
+            </p>
+          </div>
+
+          {/* Top Controls: Auto-Pacing Safety Guard & Polling switch */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {/* Safety Guard Button */}
+            <button
+              type="button"
+              onClick={handleToggleSafetyGuard}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+                rateStatus?.safetyGuardActive
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+              title={
+                lang === 'bn'
+                  ? 'অটো-প্যাসিং গার্ড: অতিরিক্ত রিকোয়েস্ট পেসিং করে ৪২৯ ত্রুটি প্রতিরোধ করে'
+                  : 'Auto-Pacing Guard: Throttles and smooths out rapid bursts to prevent 429 test interruptions'
+              }
+            >
+              <ShieldCheck className={`w-4 h-4 ${rateStatus?.safetyGuardActive ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <span>{lang === 'bn' ? 'Auto-Pacing Guard:' : 'Auto-Pacing Guard:'}</span>
+              <span
+                className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  rateStatus?.safetyGuardActive
+                    ? 'bg-emerald-500 text-slate-950 font-black'
+                    : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {rateStatus?.safetyGuardActive ? 'ACTIVE' : 'OFF'}
+              </span>
+            </button>
+
+            {/* Polling Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsRatePolling(!isRatePolling)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+                isRatePolling
+                  ? 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-600'
+                  : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+              title={isRatePolling ? 'Pause real-time 2s ticker' : 'Resume real-time 2s ticker'}
+            >
+              {isRatePolling ? <Pause className="w-3.5 h-3.5 text-cyan-400" /> : <Play className="w-3.5 h-3.5 text-slate-400" />}
+              <span className="font-mono text-[11px]">{isRatePolling ? '2s Live' : 'Paused'}</span>
+            </button>
+
+            {/* Manual Refresh */}
+            <button
+              type="button"
+              onClick={() => fetchRateStatus(true)}
+              disabled={rateLoading}
+              className="p-2 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs transition cursor-pointer disabled:opacity-50"
+              title="Refresh rate telemetry now"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${rateLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Primary 3 Telemetry Gauge Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* CARD 1: Per-Second Rate Usage & Headroom */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4.5 space-y-3 relative overflow-hidden">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+                <Zap className="w-4 h-4 text-amber-400" />
+                {lang === 'bn' ? 'বর্তমান গতিবেগ (প্রতি সেকেন্ড)' : 'Rate Usage (Per Second)'}
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  (rateStatus?.rateUsagePercentSec || 0) >= 80
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    : (rateStatus?.rateUsagePercentSec || 0) >= 40
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                }`}
+              >
+                {rateStatus?.rateUsagePercentSec || 0}% Used
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-white font-mono tracking-tight">
+                {rateStatus?.currentPerSecond ?? 0}
+              </span>
+              <span className="text-slate-400 font-mono text-sm">
+                / {rateStatus?.limitPerSecond || 25} req/sec limit
+              </span>
+            </div>
+
+            {/* Progress bar meter */}
+            <div className="space-y-1.5">
+              <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    (rateStatus?.rateUsagePercentSec || 0) >= 80
+                      ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                      : (rateStatus?.rateUsagePercentSec || 0) >= 40
+                      ? 'bg-gradient-to-r from-teal-500 to-amber-400'
+                      : 'bg-gradient-to-r from-cyan-500 to-emerald-400'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.max(4, rateStatus?.rateUsagePercentSec || 0))}%`,
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>
+                  Headroom: <strong className="text-slate-200">{Math.max(0, (rateStatus?.limitPerSecond || 25) - (rateStatus?.currentPerSecond || 0))} req/s</strong>
+                </span>
+                <span className="text-slate-500">Resets in &lt;1s</span>
+              </div>
+            </div>
+          </div>
+
+          {/* CARD 2: Rolling 1-Minute Window & Total Throughput */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4.5 space-y-3 relative overflow-hidden">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+                <Clock className="w-4 h-4 text-cyan-400" />
+                {lang === 'bn' ? 'রোলিং উইন্ডো (প্রতি মিনিট)' : 'Rolling Window (Per Minute)'}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                1-Min Window
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-white font-mono tracking-tight">
+                {rateStatus?.currentPerMinute ?? 0}
+              </span>
+              <span className="text-slate-400 font-mono text-sm">
+                / {rateStatus?.limitPerMinute || 1500} req/min
+              </span>
+            </div>
+
+            {/* Progress bar meter */}
+            <div className="space-y-1.5">
+              <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-300"
+                  style={{
+                    width: `${Math.min(100, Math.max(4, rateStatus?.rateUsagePercentMin || 0))}%`,
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>
+                  Hourly Total: <strong className="text-slate-200">{rateStatus?.hourlyUsage || 0} reqs</strong>
+                </span>
+                <span className="text-slate-500">
+                  Session: <strong className="text-slate-200">{rateStatus?.totalRequestsTracked || 0}</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* CARD 3: Health & Test Interruption Status */}
+          <div
+            className={`rounded-2xl p-4.5 space-y-3 border transition ${
+              rateStatus?.status === 'throttled'
+                ? 'bg-rose-950/30 border-rose-500/40'
+                : rateStatus?.status === 'critical'
+                ? 'bg-amber-950/30 border-amber-500/40'
+                : 'bg-slate-950/80 border-slate-800'
+            }`}
+          >
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+                <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                {lang === 'bn' ? 'টেস্টিং নিরবচ্ছিন্নতা স্ট্যাটাস' : 'Test Interruption Status'}
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                  rateStatus?.status === 'throttled'
+                    ? 'bg-rose-500 text-white'
+                    : rateStatus?.status === 'critical'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                }`}
+              >
+                {rateStatus?.status || 'HEALTHY'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 pt-0.5">
+              {rateStatus?.status === 'throttled' ? (
+                <XCircle className="w-6 h-6 text-rose-400 shrink-0" />
+              ) : rateStatus?.status === 'critical' ? (
+                <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+              )}
+              <div>
+                <p className="text-xs font-bold text-white leading-tight">
+                  {rateStatus?.status === 'throttled'
+                    ? (lang === 'bn' ? 'রেট লিমিট সীমার ঝুঁকি (HTTP 429)' : 'Rate Limit Throttle Warning (429)')
+                    : rateStatus?.status === 'critical'
+                    ? (lang === 'bn' ? 'উচ্চ বেগ: থ্রেশহোল্ডের কাছাকাছি' : 'High Velocity Approaching Limit')
+                    : (lang === 'bn' ? 'নিরাপদ টেস্টিং ভলিউম (০% ইন্টারাপশন)' : 'Zero Risk: Optimal Test Flow')}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  {rateStatus?.statusMessage || 'All Stripe API tests operating within standard safety limits.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-1 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+              <span>Stripe HTTP 429 Guard:</span>
+              <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Active &amp; Protected
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Live 30-Second Activity Velocity Histogram */}
+        <div className="bg-slate-950/90 rounded-2xl border border-slate-800/80 p-4 sm:p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+            <div className="flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-indigo-400" />
+              <h4 className="text-xs font-bold text-slate-200">
+                {lang === 'bn'
+                  ? 'সর্বশেষ ৩০ সেকেন্ডের রিকোয়েস্ট বেগ হিস্টোগ্রাম (প্রতি সেকেন্ডের স্পাইক)'
+                  : 'Last 30 Seconds Request Velocity Histogram (Per-Second Burst Activity)'}
+              </h4>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-xs bg-emerald-400" />
+                &lt;10 req/s
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-xs bg-amber-400" />
+                10-20 req/s
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-xs bg-rose-400" />
+                &gt;20 req/s
+              </span>
+            </div>
+          </div>
+
+          {/* Dynamic 30-Bar Histogram */}
+          <div className="h-24 w-full flex items-end gap-1.5 sm:gap-2 px-1 pt-4 pb-1 relative">
+            {/* Horizontal Dashed Limit Line */}
+            <div className="absolute top-2 left-0 right-0 border-b border-dashed border-rose-500/40 z-0 flex items-center justify-end pr-2 pointer-events-none">
+              <span className="text-[9px] font-mono text-rose-400/80 bg-slate-950 px-1 font-bold">
+                Limit: {rateStatus?.limitPerSecond || 25} req/s
+              </span>
+            </div>
+
+            {(rateStatus?.recentHistory || []).map((point, idx) => {
+              const limit = point.limit || 25;
+              const heightPercent = Math.min(100, Math.max(6, (point.count / limit) * 100));
+              const isHigh = point.count >= limit * 0.8;
+              const isMed = point.count >= limit * 0.4;
+
+              return (
+                <div
+                  key={point.second || idx}
+                  className="flex-1 h-full flex flex-col justify-end items-center group relative z-10"
+                >
+                  {/* Tooltip on hover */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-10 bg-slate-900 border border-slate-700 text-white font-mono text-[10px] rounded px-2 py-1 shadow-xl pointer-events-none whitespace-nowrap z-30">
+                    {point.count} reqs at {point.label}
+                  </div>
+
+                  {/* Bar */}
+                  <div
+                    className={`w-full rounded-t-xs transition-all duration-300 ${
+                      isHigh
+                        ? 'bg-rose-500 hover:bg-rose-400'
+                        : isMed
+                        ? 'bg-amber-400 hover:bg-amber-300'
+                        : point.count > 0
+                        ? 'bg-emerald-400 hover:bg-emerald-300'
+                        : 'bg-slate-800/40 hover:bg-slate-800'
+                    }`}
+                    style={{ height: `${heightPercent}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Axis Footer */}
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 px-1 pt-1 border-t border-slate-900">
+            <span>-30s Ago</span>
+            <span>-20s</span>
+            <span>-10s</span>
+            <span className="text-emerald-400 font-bold">Now (Current Second)</span>
+          </div>
+        </div>
+
+        {/* Testing Interruption Prevention Tools & Burst Simulation Buttons */}
+        <div className="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              {lang === 'bn' ? 'টেস্ট ভেলোসিটি সিমুলেশন ও ভেরিফিকেশন' : 'Test Velocity Simulation & Prevention Controls'}
+            </h4>
+            <p className="text-[11px] text-slate-400 max-w-xl">
+              {lang === 'bn'
+                ? 'টেস্ট সিমুলেশন বাটন চাপ দিয়ে রিয়েল-টাইম গেজ পরীক্ষা করুন এবং নিশ্চিত হোন যে আপনার টেস্ট সুইট ৪২৯ লিমিট ছাড়াই নিরাপদ থাকবে।'
+                : 'Simulate concurrent test bursts to test gauge reactivity and verify Auto-Pacing Guard prevents HTTP 429 interruptions.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleTriggerBurst(5)}
+              disabled={rateBurstSimulating}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+            >
+              <Zap className="w-3 h-3 text-emerald-400" />
+              <span>{lang === 'bn' ? 'হালকা (৫ req)' : 'Light (5 req)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTriggerBurst(12)}
+              disabled={rateBurstSimulating}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+            >
+              <Zap className="w-3 h-3 text-amber-400" />
+              <span>{lang === 'bn' ? 'মাঝারি (১২ req)' : 'Moderate (12 req)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTriggerBurst(22)}
+              disabled={rateBurstSimulating}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-rose-500/40 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+            >
+              <Zap className="w-3 h-3 text-rose-400" />
+              <span>{lang === 'bn' ? 'সীমার কাছাকাছি (২২ req)' : 'Heavy Burst (22 req)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetRateMonitor}
+              className="p-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-500 hover:text-slate-300 transition cursor-pointer"
+              title="Reset monitor history"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>

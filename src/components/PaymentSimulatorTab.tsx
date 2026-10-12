@@ -40,6 +40,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
 
   // Simulation State
   const [loading, setLoading] = useState<boolean>(false);
+  const [autoSendGmail, setAutoSendGmail] = useState<boolean>(true);
   const [show3dsModal, setShow3dsModal] = useState<boolean>(false);
   const [threeDsCode, setThreeDsCode] = useState<string>('123456');
   const [pendingIntent, setPendingIntent] = useState<any>(null);
@@ -94,8 +95,26 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
       }
 
       if (sanitizedNum === '4000000000009995') {
+        const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
+        fetch('/api/payment-intents/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: simId,
+            amount,
+            currency,
+            status: 'requires_payment_method',
+            customerEmail,
+            customerName: cardName,
+            description,
+            cardBrand: 'visa',
+            cardLast4: '9995',
+            lastPaymentError: { code: 'card_declined', declineCode: 'insufficient_funds', message: 'Your card has insufficient funds. (insufficient_funds)' },
+          }),
+        }).catch(() => {});
+
         setResult({
-          paymentIntentId: intentData.paymentIntentId || 'pi_sim_error',
+          paymentIntentId: simId,
           clientSecret: intentData.clientSecret || '',
           amount: Math.round(amount * 100),
           currency,
@@ -111,8 +130,26 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
       }
 
       if (sanitizedNum === '4000000000000002') {
+        const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
+        fetch('/api/payment-intents/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: simId,
+            amount,
+            currency,
+            status: 'requires_payment_method',
+            customerEmail,
+            customerName: cardName,
+            description,
+            cardBrand: 'mastercard',
+            cardLast4: '0002',
+            lastPaymentError: { code: 'card_declined', declineCode: 'generic_decline', message: 'Your card was declined. (card_declined)' },
+          }),
+        }).catch(() => {});
+
         setResult({
-          paymentIntentId: intentData.paymentIntentId || 'pi_sim_error',
+          paymentIntentId: simId,
           clientSecret: intentData.clientSecret || '',
           amount: Math.round(amount * 100),
           currency,
@@ -128,8 +165,26 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
       }
 
       if (sanitizedNum === '4000000000000069') {
+        const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
+        fetch('/api/payment-intents/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: simId,
+            amount,
+            currency,
+            status: 'canceled',
+            customerEmail,
+            customerName: cardName,
+            description,
+            cardBrand: 'visa',
+            cardLast4: '0069',
+            lastPaymentError: { code: 'expired_card', message: 'Your card has expired. (expired_card)' },
+          }),
+        }).catch(() => {});
+
         setResult({
-          paymentIntentId: intentData.paymentIntentId || 'pi_sim_error',
+          paymentIntentId: simId,
           clientSecret: intentData.clientSecret || '',
           amount: Math.round(amount * 100),
           currency,
@@ -145,8 +200,26 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
       }
 
       if (sanitizedNum === '4000000000000127') {
+        const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
+        fetch('/api/payment-intents/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: simId,
+            amount,
+            currency,
+            status: 'requires_payment_method',
+            customerEmail,
+            customerName: cardName,
+            description,
+            cardBrand: 'visa',
+            cardLast4: '0127',
+            lastPaymentError: { code: 'incorrect_cvc', message: "Your card's security code is incorrect. (incorrect_cvc)" },
+          }),
+        }).catch(() => {});
+
         setResult({
-          paymentIntentId: intentData.paymentIntentId || 'pi_sim_error',
+          paymentIntentId: simId,
           clientSecret: intentData.clientSecret || '',
           amount: Math.round(amount * 100),
           currency,
@@ -162,7 +235,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
       }
 
       // Default: Success!
-      setResult({
+      const newResult: PaymentSimulationResult = {
         paymentIntentId: intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10),
         clientSecret: intentData.clientSecret || '',
         amount: Math.round(amount * 100),
@@ -172,7 +245,38 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
         status: 'succeeded',
         createdAt: new Date().toISOString(),
         isSimulation: intentData.isSimulation,
-      });
+      };
+
+      fetch('/api/payment-intents/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newResult.paymentIntentId,
+          amount,
+          currency,
+          status: 'succeeded',
+          customerEmail,
+          customerName: cardName,
+          description,
+          cardBrand: 'visa',
+          cardLast4: sanitizedNum.slice(-4) || '4242',
+          receiptUrl: `https://pay.stripe.com/receipts/test_${newResult.paymentIntentId}`,
+        }),
+      }).catch(() => {});
+
+      setResult(newResult);
+
+      if (autoSendGmail && onDispatchReceiptModal) {
+        onDispatchReceiptModal({
+          recipientEmail: customerEmail,
+          customerName: cardName,
+          amount: Math.round(amount * 100),
+          currency,
+          paymentIntentId: newResult.paymentIntentId,
+          description,
+          status: 'succeeded',
+        });
+      }
     } catch (err: any) {
       setResult({
         paymentIntentId: 'pi_error',
@@ -195,7 +299,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
     if (!pendingIntent) return;
 
     if (success) {
-      setResult({
+      const newResult: PaymentSimulationResult = {
         paymentIntentId: pendingIntent.paymentIntentId,
         clientSecret: pendingIntent.clientSecret,
         amount: Math.round(amount * 100),
@@ -205,7 +309,20 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
         status: 'succeeded',
         createdAt: new Date().toISOString(),
         isSimulation: pendingIntent.isSimulation,
-      });
+      };
+      setResult(newResult);
+
+      if (autoSendGmail && onDispatchReceiptModal) {
+        onDispatchReceiptModal({
+          recipientEmail: customerEmail,
+          customerName: cardName,
+          amount: Math.round(amount * 100),
+          currency,
+          paymentIntentId: pendingIntent.paymentIntentId,
+          description,
+          status: 'succeeded',
+        });
+      }
     } else {
       setResult({
         paymentIntentId: pendingIntent.paymentIntentId,
@@ -419,6 +536,22 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
                 />
               </div>
             </div>
+
+            {/* Auto-Send to Gmail Checkbox */}
+            <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/80 border border-indigo-500/20 hover:border-indigo-500/40 p-2.5 rounded-xl transition text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoSendGmail}
+                onChange={(e) => setAutoSendGmail(e.target.checked)}
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-950 border-slate-700 cursor-pointer"
+              />
+              <span className="flex items-center gap-1.5 font-medium text-slate-200">
+                <Mail className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                {lang === 'bn'
+                  ? 'পেমেন্ট সফল হওয়ার সাথে সাথে স্বয়ংক্রিয়ভাবে গ্রাহকের জিমেইলে রসিদ পাঠান'
+                  : 'Auto-dispatch official payment receipt to Gmail on success'}
+              </span>
+            </label>
 
             <button
               type="submit"

@@ -13,11 +13,14 @@ import {
   Sparkles,
   ExternalLink,
   Languages,
+  TrendingUp,
 } from 'lucide-react';
 import { initAuth } from './firebase';
 import { GoogleSignInButton } from './components/GoogleSignInButton';
 import { ConfirmEmailModal } from './components/ConfirmEmailModal';
 import { KeyVerifierTab } from './components/KeyVerifierTab';
+import { TransactionLogsTab } from './components/TransactionLogsTab';
+import { VirtualCardTab } from './components/VirtualCardTab';
 import { PaymentSimulatorTab } from './components/PaymentSimulatorTab';
 import { AIAgentTab } from './components/AIAgentTab';
 import { SubscriptionTab } from './components/SubscriptionTab';
@@ -31,7 +34,7 @@ import { PWABuilderModal } from './components/PWABuilderModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Bot } from 'lucide-react';
 
-type TabType = 'verifier' | 'simulator' | 'ai-agent' | 'subscriptions' | 'webhooks' | 'gmail' | 'deployment';
+type TabType = 'verifier' | 'transactions' | 'virtual-card' | 'ai-agent' | 'simulator' | 'subscriptions' | 'webhooks' | 'gmail' | 'deployment';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('verifier');
@@ -66,17 +69,101 @@ export default function App() {
 
     // 2. Fetch server stripe config
     fetch('/api/config')
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data.publishableKey) setPublishableKey(data.publishableKey);
-        setServerKeyConfigured(Boolean(data.hasServerSecretKey));
+        if (data) {
+          if (data.publishableKey) setPublishableKey(data.publishableKey);
+          setServerKeyConfigured(Boolean(data.hasServerSecretKey));
+        }
       })
-      .catch((err) => console.log('Config load notice:', err));
+      .catch(() => {});
+
+    // 3. Check for URL redirect params (e.g. ?status=success&session_id=...)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const statusParam = params.get('status');
+      const sessionIdParam = params.get('session_id');
+
+      if (statusParam === 'success') {
+        window.history.replaceState({}, '', window.location.pathname);
+
+        if (sessionIdParam) {
+          fetch(`/api/checkout-session/${sessionIdParam}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then(async (sessionData) => {
+              const email = sessionData?.customerEmail || 'customer@example.com';
+              const receiptData: PaymentReceiptEmailData = {
+                recipientEmail: email,
+                customerName: sessionData?.customerName || 'Customer',
+                amount: sessionData?.amount || 2500,
+                currency: sessionData?.currency || 'usd',
+                paymentIntentId: sessionData?.paymentIntentId || sessionIdParam,
+                description: 'Stripe Online Checkout Payment',
+                status: 'succeeded',
+              };
+
+              // Try auto-sending if user is already signed into Google
+              try {
+                await sendGmailReceipt(receiptData);
+                setToastMessage({
+                  text:
+                    lang === 'bn'
+                      ? `🎉 পেমেন্ট সফল হয়েছে এবং সরাসরি ${email}-এ Gmail রসিদ পাঠানো হয়েছে!`
+                      : `🎉 Payment successful! Official receipt sent to ${email} via Gmail.`,
+                  type: 'success',
+                });
+                setTimeout(() => setToastMessage(null), 8000);
+              } catch (_autoSendErr) {
+                // If not signed in or needs confirmation, open modal
+                setPendingEmailData(receiptData);
+                setEmailModalOpen(true);
+                setToastMessage({
+                  text:
+                    lang === 'bn'
+                      ? `🎉 পেমেন্ট সফল হয়েছে! জিমেইলে রসিদ পাঠাতে নিশ্চিত করুন।`
+                      : `🎉 Payment successful! Confirm to dispatch receipt to ${email}.`,
+                  type: 'success',
+                });
+                setTimeout(() => setToastMessage(null), 8000);
+              }
+            })
+            .catch(() => {
+              setToastMessage({
+                text:
+                  lang === 'bn'
+                    ? `🎉 পেমেন্ট সফল হয়েছে! (Session: ${sessionIdParam})`
+                    : `🎉 Payment successfully completed! (Session: ${sessionIdParam})`,
+                type: 'success',
+              });
+              setTimeout(() => setToastMessage(null), 8000);
+            });
+        } else {
+          setToastMessage({
+            text:
+              lang === 'bn'
+                ? '🎉 পেমেন্ট সফলভাবে সম্পন্ন হয়েছে!'
+                : '🎉 Payment successfully completed!',
+            type: 'success',
+          });
+          setTimeout(() => setToastMessage(null), 8000);
+        }
+      } else if (statusParam === 'cancelled') {
+        setToastMessage({
+          text:
+            lang === 'bn'
+              ? 'পেমেন্ট বাতিল করা হয়েছে।'
+              : 'Payment session was cancelled.',
+          type: 'error',
+        });
+        setTimeout(() => setToastMessage(null), 5000);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch (_e) {}
 
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, []);
+  }, [lang]);
 
   const handleOpenReceiptModal = (data: PaymentReceiptEmailData) => {
     setPendingEmailData(data);
@@ -114,6 +201,18 @@ export default function App() {
       labelBn: 'কী ভেরিফিকেশন',
       labelEn: 'API Key Check',
       icon: <KeyRound className="w-4 h-4" />,
+    },
+    {
+      id: 'transactions',
+      labelBn: 'ট্রানজ্যাকশন লগ ও ট্রেন্ড',
+      labelEn: 'Transaction Logs',
+      icon: <TrendingUp className="w-4 h-4 text-emerald-400" />,
+    },
+    {
+      id: 'virtual-card',
+      labelBn: 'ভার্চুয়াল কার্ড ও ওয়ালেট',
+      labelEn: 'Virtual Card & Wallet',
+      icon: <CreditCard className="w-4 h-4 text-emerald-400" />,
     },
     {
       id: 'ai-agent',
@@ -271,6 +370,19 @@ export default function App() {
             setKeyStatus={setKeyStatus}
             lang={lang}
           />
+        )}
+
+        {activeTab === 'transactions' && (
+          <TransactionLogsTab
+            manualSecretKey={manualSecretKey}
+            onDispatchReceiptModal={handleOpenReceiptModal}
+            isGmailConnected={Boolean(user)}
+            lang={lang}
+          />
+        )}
+
+        {activeTab === 'virtual-card' && (
+          <VirtualCardTab lang={lang} />
         )}
 
         {activeTab === 'ai-agent' && (
