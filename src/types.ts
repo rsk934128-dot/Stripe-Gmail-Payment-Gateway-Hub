@@ -7,7 +7,7 @@ export interface StripeKeyStatus {
   success: boolean;
   message?: string;
   error?: string;
-  livemode?: boolean;
+  livemode?: boolean | string;
   mode?: string;
   accountId?: string;
   businessName?: string;
@@ -66,7 +66,7 @@ export interface ApiEventLog {
   durationMs: number;
   status: 'success' | 'failure';
   eventType: string;
-  source: 'api' | 'webhook' | 'stripe' | 'simulation';
+  source: 'api' | 'webhook' | 'stripe' | 'simulation' | 'client';
   requestBody?: any;
   requestHeaders?: Record<string, any>;
   responseBody?: any;
@@ -176,5 +176,97 @@ export interface RateLimitStatus {
   safetyGuardActive: boolean;
   recentHistory: RateLimitHistoryPoint[];
   lastUpdated: string;
+}
+
+export interface SystemHealthMemory {
+  heapUsedMb: number;
+  heapTotalMb: number;
+  rssMb: number;
+  externalMb: number;
+  heapPercent: number;
+}
+
+export interface SystemHealthTraffic {
+  totalRequests: number;
+  successful: number;
+  clientErrors: number;
+  serverErrors: number;
+  successRate: number;
+}
+
+export interface SystemHealthLatency {
+  avgMs: number;
+  minMs: number;
+  maxMs: number;
+  p95Ms: number;
+}
+
+export interface SystemHealthBottleneck {
+  category: 'memory' | 'latency' | 'errors' | 'concurrency';
+  severity: 'optimal' | 'warning' | 'critical';
+  title: string;
+  description: string;
+  actionableTip: string;
+}
+
+export interface SystemHealthDiagnostics {
+  score: number;
+  status: 'optimal' | 'healthy' | 'degraded' | 'bottleneck_detected';
+  bottlenecks: SystemHealthBottleneck[];
+}
+
+export interface EndpointHealthMetric {
+  endpoint: string;
+  method: string;
+  count: number;
+  totalDurationMs: number;
+  minDurationMs: number;
+  maxDurationMs: number;
+  avgDurationMs: number;
+  errors: number;
+  lastStatusCode: number;
+  lastTimestamp: string;
+}
+
+export interface LatencyHistoryPoint {
+  id: string;
+  timestamp: string;
+  timeLabel: string;
+  endpoint: string;
+  method: string;
+  statusCode: number;
+  durationMs: number;
+  status: 'fast' | 'normal' | 'slow' | 'critical';
+}
+
+export interface MemoryHistoryPoint {
+  timestamp: string;
+  timeLabel: string;
+  heapUsedMb: number;
+  heapTotalMb: number;
+  rssMb: number;
+  externalMb: number;
+  heapPercent: number;
+}
+
+export interface SystemHealthResponse {
+  success: boolean;
+  uptimeSeconds: number;
+  serverStartTime: string;
+  environment: {
+    nodeVersion: string;
+    platform: string;
+    arch: string;
+    pid: number;
+    isProduction: boolean;
+  };
+  memory: SystemHealthMemory;
+  traffic: SystemHealthTraffic;
+  latency: SystemHealthLatency;
+  diagnostics: SystemHealthDiagnostics;
+  recentLatencyHistory: LatencyHistoryPoint[];
+  memoryHistory: MemoryHistoryPoint[];
+  endpoints: EndpointHealthMetric[];
+  timestamp: string;
 }
 

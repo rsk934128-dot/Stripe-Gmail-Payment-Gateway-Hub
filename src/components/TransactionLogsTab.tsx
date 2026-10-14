@@ -195,9 +195,14 @@ export const TransactionLogsTab: React.FC<TransactionLogsTabProps> = ({
         errorObj = { code: 'expired_card', message: 'Your card has expired (expired_card)', type: 'card_error' };
       }
 
+      const recordHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (manualSecretKey && manualSecretKey.trim()) {
+        recordHeaders['x-stripe-secret-key'] = manualSecretKey.trim();
+      }
+
       const res = await fetch('/api/payment-intents/record', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: recordHeaders,
         body: JSON.stringify({
           amount: testAmount,
           currency: 'USD',

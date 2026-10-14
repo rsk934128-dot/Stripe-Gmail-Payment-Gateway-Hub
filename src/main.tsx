@@ -2,6 +2,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { initGlobalErrorHandlers } from './services/errorLogging';
+
+// Initialize centralized global error listeners for unhandled rejections and runtime exceptions
+initGlobalErrorHandlers();
 
 const rootElement = document.getElementById('root');
 if (rootElement) {

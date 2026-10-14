@@ -98,7 +98,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
         const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
         fetch('/api/payment-intents/record', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             id: simId,
             amount,
@@ -133,7 +133,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
         const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
         fetch('/api/payment-intents/record', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             id: simId,
             amount,
@@ -168,7 +168,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
         const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
         fetch('/api/payment-intents/record', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             id: simId,
             amount,
@@ -203,7 +203,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
         const simId = intentData.paymentIntentId || 'pi_sim_' + Math.random().toString(36).substring(2, 10);
         fetch('/api/payment-intents/record', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             id: simId,
             amount,
@@ -249,7 +249,7 @@ export const PaymentSimulatorTab: React.FC<PaymentSimulatorTabProps> = ({
 
       fetch('/api/payment-intents/record', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           id: newResult.paymentIntentId,
           amount,

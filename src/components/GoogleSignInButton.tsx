@@ -1,6 +1,6 @@
 import React from 'react';
 import { User } from 'firebase/auth';
-import { googleSignIn, logout } from '../firebase';
+import { googleSignIn, logout, isAuthCancellationError } from '../firebase';
 import { LogOut, Mail, CheckCircle2 } from 'lucide-react';
 
 interface GoogleSignInButtonProps {
@@ -26,8 +26,15 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
         onAuthChange(res.user);
       }
     } catch (err: any) {
-      console.error(err);
-      setError(err?.message || 'Google সাইন-ইন ব্যর্থ হয়েছে');
+      if (!isAuthCancellationError(err)) {
+        console.warn('Google sign-in notice:', err?.message || err);
+        setError(
+          err?.message ||
+            (lang === 'bn'
+              ? 'Google সাইন-ইন সম্পন্ন করা সম্ভব হয়নি।'
+              : 'Google sign-in could not be completed.')
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -38,7 +45,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       await logout();
       onAuthChange(null);
     } catch (err: any) {
-      console.error(err);
+      console.warn('Sign-out notice:', err?.message || err);
     }
   };
 

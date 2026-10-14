@@ -72,7 +72,7 @@ export const KeyVerifierTab: React.FC<KeyVerifierTabProps> = ({
 }) => {
   const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [useManualKey, setUseManualKey] = useState(false);
+  const [useManualKey, setUseManualKey] = useState(!serverKeyConfigured || Boolean(manualSecretKey));
   const [logFilter, setLogFilter] = useState<'all' | 'success' | 'error'>('all');
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
@@ -224,7 +224,7 @@ export const KeyVerifierTab: React.FC<KeyVerifierTabProps> = ({
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (useManualKey && manualSecretKey) {
+      if (manualSecretKey && manualSecretKey.trim()) {
         headers['x-stripe-secret-key'] = manualSecretKey.trim();
       }
 

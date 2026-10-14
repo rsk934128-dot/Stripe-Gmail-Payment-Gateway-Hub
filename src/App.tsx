@@ -14,6 +14,9 @@ import {
   ExternalLink,
   Languages,
   TrendingUp,
+  Globe,
+  Bot,
+  Activity,
 } from 'lucide-react';
 import { initAuth } from './firebase';
 import { GoogleSignInButton } from './components/GoogleSignInButton';
@@ -27,28 +30,70 @@ import { SubscriptionTab } from './components/SubscriptionTab';
 import { WebhookStudioTab } from './components/WebhookStudioTab';
 import { GmailInboxTab } from './components/GmailInboxTab';
 import { DeploymentGuideTab } from './components/DeploymentGuideTab';
+import { SystemHealthTab } from './components/SystemHealthTab';
+import { LiveConnectionModal } from './components/LiveConnectionModal';
 import { sendGmailReceipt, PaymentReceiptEmailData } from './services/gmail';
 import { StripeKeyStatus } from './types';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { PWABuilderModal } from './components/PWABuilderModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { Bot } from 'lucide-react';
 
-type TabType = 'verifier' | 'transactions' | 'virtual-card' | 'ai-agent' | 'simulator' | 'subscriptions' | 'webhooks' | 'gmail' | 'deployment';
+type TabType =
+  | 'verifier'
+  | 'transactions'
+  | 'virtual-card'
+  | 'ai-agent'
+  | 'simulator'
+  | 'subscriptions'
+  | 'webhooks'
+  | 'gmail'
+  | 'health'
+  | 'deployment';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('verifier');
   const [lang, setLang] = useState<'bn' | 'en'>('bn');
   const [pwaModalOpen, setPwaModalOpen] = useState<boolean>(false);
+  const [liveModalOpen, setLiveModalOpen] = useState<boolean>(false);
   
   // Auth state
   const [user, setUser] = useState<User | null>(null);
   
-  // Stripe state
+  // Stripe state with persistent localStorage storage for seamless live hosting
   const [serverKeyConfigured, setServerKeyConfigured] = useState<boolean>(false);
-  const [manualSecretKey, setManualSecretKey] = useState<string>('');
-  const [publishableKey, setPublishableKey] = useState<string>('');
-  const [keyStatus, setKeyStatus] = useState<StripeKeyStatus | null>(null);
+  const [manualSecretKey, setManualSecretKey] = useState<string>(() => {
+    return localStorage.getItem('stripe_manual_secret_key') || '';
+  });
+  const [publishableKey, setPublishableKey] = useState<string>(() => {
+    return localStorage.getItem('stripe_publishable_key') || '';
+  });
+  const [keyStatus, setKeyStatus] = useState<StripeKeyStatus | null>(() => {
+    try {
+      const saved = localStorage.getItem('stripe_key_status');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Keep localStorage synchronized
+  useEffect(() => {
+    if (manualSecretKey && manualSecretKey.trim()) {
+      localStorage.setItem('stripe_manual_secret_key', manualSecretKey.trim());
+    }
+  }, [manualSecretKey]);
+
+  useEffect(() => {
+    if (publishableKey && publishableKey.trim()) {
+      localStorage.setItem('stripe_publishable_key', publishableKey.trim());
+    }
+  }, [publishableKey]);
+
+  useEffect(() => {
+    if (keyStatus) {
+      localStorage.setItem('stripe_key_status', JSON.stringify(keyStatus));
+    }
+  }, [keyStatus]);
 
   // Email confirmation modal state
   const [emailModalOpen, setEmailModalOpen] = useState<boolean>(false);
@@ -72,8 +117,26 @@ export default function App() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) {
-          if (data.publishableKey) setPublishableKey(data.publishableKey);
+          if (data.publishableKey && !localStorage.getItem('stripe_publishable_key')) {
+            setPublishableKey(data.publishableKey);
+          }
           setServerKeyConfigured(Boolean(data.hasServerSecretKey));
+        }
+      })
+      .catch(() => {});
+
+    // 3. Auto-verify saved key or server key for instant connection
+    const activeKey = localStorage.getItem('stripe_manual_secret_key') || '';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (activeKey) {
+      headers['x-stripe-secret-key'] = activeKey;
+    }
+    fetch('/api/verify-key', { method: 'POST', headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && (data.success || data.livemode)) {
+          setKeyStatus(data);
+          localStorage.setItem('stripe_key_status', JSON.stringify(data));
         }
       })
       .catch(() => {});
@@ -245,6 +308,12 @@ export default function App() {
       icon: <Mail className="w-4 h-4 text-red-400" />,
     },
     {
+      id: 'health',
+      labelBn: 'সিস্টেম হেলথ',
+      labelEn: 'System Health',
+      icon: <Activity className="w-4 h-4 text-emerald-400" />,
+    },
+    {
       id: 'deployment',
       labelBn: 'ডেপ্লয়মেন্ট ও কোড',
       labelEn: 'Export & Deploy',
@@ -294,9 +363,36 @@ export default function App() {
                   <span className="text-indigo-400">&amp;</span>
                   <span>Gmail Hub</span>
                 </h1>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  Local Sandbox
-                </span>
+                {/* Dynamic Live / Test / Sandbox Gateway Connection Pill */}
+                {keyStatus?.livemode === true || keyStatus?.livemode === 'Live Mode' || manualSecretKey.startsWith('sk_live_') || manualSecretKey.startsWith('rk_live_') ? (
+                  <button
+                    onClick={() => setLiveModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition cursor-pointer"
+                    title={lang === 'bn' ? 'লাইভ মোড কানেক্টেড - সেটিংস দেখতে ক্লিক করুন' : 'Live Mode Connected - Click to view gateway settings'}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>LIVE MODE</span>
+                  </button>
+                ) : keyStatus?.livemode === false || keyStatus?.livemode === 'Test Mode' || manualSecretKey.startsWith('sk_test_') || manualSecretKey.startsWith('rk_test_') ? (
+                  <button
+                    onClick={() => setLiveModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer"
+                    title={lang === 'bn' ? 'টেস্ট মোড কানেক্টেড - সেটিংস দেখতে ক্লিক করুন' : 'Test Mode Connected - Click to view gateway settings'}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    <span>TEST MODE</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setLiveModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/25 transition cursor-pointer"
+                    title={lang === 'bn' ? 'লাইভ বা টেস্ট গেটওয়ে কী কানেক্ট করুন' : 'Click to connect Stripe Live or Test Key'}
+                  >
+                    <Globe className="w-3 h-3 text-indigo-400" />
+                    <span className="hidden sm:inline">{lang === 'bn' ? 'গেটওয়ে কানেক্ট' : 'Connect Stripe'}</span>
+                    <span className="sm:hidden">CONNECT</span>
+                  </button>
+                )}
               </div>
               <p className="text-[11px] text-slate-400 truncate hidden md:block">
                 {lang === 'bn'
@@ -306,8 +402,18 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Header: Language Switcher, PWA Install & Google Sign-In */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Right Header: Connect Stripe Button, PWABuilder, Language Switcher, PWA Install & Google Sign-In */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Quick Live Gateway Connection Button */}
+            <button
+              onClick={() => setLiveModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+              title={lang === 'bn' ? 'Stripe লাইভ/টেস্ট গেটওয়ে সংযোগ' : 'Stripe Live/Test Connection'}
+            >
+              <Globe className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">{lang === 'bn' ? 'কানেকশন' : 'Gateway'}</span>
+            </button>
+
             {/* PWABuilder Compliance Modal Trigger */}
             <button
               onClick={() => setPwaModalOpen(true)}
@@ -422,6 +528,8 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'health' && <SystemHealthTab lang={lang} />}
+
         {activeTab === 'deployment' && <DeploymentGuideTab lang={lang} />}
       </main>
 
@@ -454,6 +562,20 @@ export default function App() {
           </div>
         </div>
       </footer>
+      {/* Live & Test Gateway Connection Settings Modal */}
+      <LiveConnectionModal
+        isOpen={liveModalOpen}
+        onClose={() => setLiveModalOpen(false)}
+        manualSecretKey={manualSecretKey}
+        setManualSecretKey={setManualSecretKey}
+        publishableKey={publishableKey}
+        setPublishableKey={setPublishableKey}
+        keyStatus={keyStatus}
+        setKeyStatus={setKeyStatus}
+        serverKeyConfigured={serverKeyConfigured}
+        lang={lang}
+      />
+
       {/* PWABuilder Compliance Audit Modal */}
       <PWABuilderModal
         isOpen={pwaModalOpen}

@@ -76,26 +76,59 @@ export const initAuth = (
   }
 };
 
+export const isAuthCancellationError = (error: any): boolean => {
+  if (!error) return false;
+  const code = typeof error === 'object' && error.code ? error.code : '';
+  const message = typeof error === 'object' && error.message ? error.message : String(error || '');
+  return (
+    code === 'auth/popup-closed-by-user' ||
+    code === 'auth/cancelled-popup-request' ||
+    message.includes('popup-closed-by-user') ||
+    message.includes('cancelled-popup-request')
+  );
+};
+
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+  if (isSigningIn) {
+    return null;
+  }
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to retrieve access token from Google sign-in');
+    
+    let token = credential?.accessToken || null;
+    if (!token && result.user) {
+      try {
+        token = await result.user.getIdToken();
+      } catch (_idTokenErr) {
+        token = '';
+      }
     }
 
-    cachedAccessToken = credential.accessToken;
+    cachedAccessToken = token;
     try {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem(TOKEN_STORAGE_KEY, credential.accessToken);
-        localStorage.setItem(TOKEN_STORAGE_KEY, credential.accessToken);
+      if (typeof window !== 'undefined' && token) {
+        sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
       }
     } catch (_e) {}
 
-    return { user: result.user, accessToken: cachedAccessToken };
+    return { user: result.user, accessToken: token || '' };
   } catch (error: any) {
-    console.error('Google Sign-in failed:', error);
+    if (isAuthCancellationError(error)) {
+      // User closed or dismissed the popup; handle gracefully without console.error
+      return null;
+    }
+
+    if (error?.code === 'auth/popup-blocked') {
+      console.warn('Google sign-in popup was blocked by browser settings.');
+      throw new Error(
+        'ব্রাউজার পপ-আপ ব্লক করেছে। অনুগ্রহ করে ব্রাউজার সেটিংসে পপ-আপ অনুমোদন করুন।'
+      );
+    }
+
+    console.warn('Google Sign-in encountered an issue:', error?.message || error);
     throw error;
   } finally {
     isSigningIn = false;
@@ -113,8 +146,7 @@ export const logout = async (): Promise<void> => {
     } catch (_e) {}
     await signOut(auth);
   } catch (error: any) {
-    console.error('Firebase sign-out failed:', error);
-    throw error;
+    console.warn('Firebase sign-out notice:', error?.message || error);
   }
 };
 
